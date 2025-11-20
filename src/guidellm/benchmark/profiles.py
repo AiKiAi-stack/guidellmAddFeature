@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal
 
+from guidellm.benchmark.schemas import Benchmark
 import numpy as np
 from pydantic import (
     Field,
@@ -605,6 +606,10 @@ class SweepProfile(Profile):
         default_factory=list,
         description="Interpolated rates between synchronous and throughput",
     )
+    strategy_constraints: dict[str, list[Any]] | None = Field(
+        default=None,
+        description="Constraints for each strategy in the sweep",
+    )
 
     @classmethod
     def resolve_args(
@@ -638,6 +643,22 @@ class SweepProfile(Profile):
         types = ["synchronous", "throughput"]
         types += [self.strategy_type] * (self.sweep_size - len(types))
         return types
+
+    def next_strategy_constraints(self, 
+                                  next_strategy: SchedulingStrategy | None, 
+                                  prev_strategy: SchedulingStrategy | None, 
+                                  prev_benchmark: Benchmark | None,
+     ) -> dict[str, Constraint] | None:
+        if not next_strategy:
+            return None
+        current_index = len(self.completed_strategies)
+        strategy_type = next_strategy.type_
+        strategy_constraints: dict[str, Any] = {}
+        if self.strategy_constraints:
+            for key, val in self.strategy_constraints.items():
+                strategy_constraints[key] = val[current_index]
+        
+        return ConstraintsInitializerFactory.resolve_constraints(strategy_constraints)
 
     def next_strategy(
         self,
