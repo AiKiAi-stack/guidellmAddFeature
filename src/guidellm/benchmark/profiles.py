@@ -652,13 +652,21 @@ class SweepProfile(Profile):
         if not next_strategy:
             return None
         current_index = len(self.completed_strategies)
-        strategy_type = next_strategy.type_
-        strategy_constraints: dict[str, Any] = {}
+        final_constraints = None
+
+        if self.constraints:
+            final_constraints = dict(self.constraints)
+        else:
+            final_constraints = {}
+
         if self.strategy_constraints:
             for key, val in self.strategy_constraints.items():
-                strategy_constraints[key] = val[current_index]
-        
-        return ConstraintsInitializerFactory.resolve_constraints(strategy_constraints)
+                if isinstance(val, list) and 0 <= current_index < len(val):
+                    final_constraints[key] = val[current_index]
+        return (
+            ConstraintsInitializerFactory.resolve(final_constraints)
+            if final_constraints else None
+        )
 
     def next_strategy(
         self,
