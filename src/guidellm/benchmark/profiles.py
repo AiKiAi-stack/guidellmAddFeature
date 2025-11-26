@@ -609,6 +609,10 @@ class SweepProfile(Profile):
         default_factory=list,
         description="Interpolated rates between synchronous and throughput",
     )
+    per_constraints: dict[str, list[Any]] | None = Field(
+        default=None,
+        description="Per-strategy constraints only valid in sweep mode",
+    )
 
     @classmethod
     def resolve_args(
@@ -632,7 +636,51 @@ class SweepProfile(Profile):
         kwargs["random_seed"] = random_seed
         if rate_type in ["constant", "poisson"]:
             kwargs["strategy_type"] = rate_type
+
+        # Handle per-strategy constraints
+        if "per_constraints" in kwargs:
+            # Already in the correct format, keep it
+            pass
+        elif "constraints" in kwargs:
+            # Backward compatibility: split into per-strategy and shared constraints
+            constraints = kwargs["constraints"]
+            if isinstance(constraints, dict):
+                shared_constraints = {}
+                per_constraints = {}
+                for key, val in constraints.items():
+                    if isinstance(val, list):
+                        per_constraints[key] = val
+                    else:
+                        shared_constraints[key] = val
+                kwargs["constraints"] = shared_constraints or None
+                kwargs["per_constraints"] = per_constraints or None
         return kwargs
+
+    def next_strategy_constraints(
+        self,
+        next_strategy: SchedulingStrategy | None,
+        prev_strategy: SchedulingStrategy | None,
+        prev_benchmark: Benchmark | None,
+    ) -> dict[str, Constraint] | None:
+        if not next_strategy:
+            return None
+
+        current_index = len(self.completed_strategies)
+        final_constraints: dict[str, Any] = dict(self.constraints or {})
+
+        if self.per_constraints:
+            for key, val in self.per_constraints.items():
+                if 0 <= current_index < self.sweep_size:
+                    constraint_val = val[current_index]
+                    if constraint_val is None:
+                        final_constraints.pop(key, None)
+                    else:
+                        final_constraints[key] = constraint_val
+        return (
+            ConstraintsInitializerFactory.resolve(final_constraints)
+            if final_constraints
+            else None
+        )
 
     @property
     def strategy_types(self) -> list[str]:

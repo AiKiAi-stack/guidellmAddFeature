@@ -384,6 +384,12 @@ def benchmark():
     default=BenchmarkGenerativeTextArgs.get_default("max_global_error_rate"),
     help="Maximum global error rate across all benchmarks.",
 )
+@click.option(
+    "--per-constraints",
+    callback=cli_tools.parse_json,
+    default=None,
+    help="Per-strategy constraints for sweep mode. Format: {'constraint_name': [value1, value2, ...]}",
+)
 def run(**kwargs):
     # Only set CLI args that differ from click defaults
     kwargs = cli_tools.set_if_not_default(click.get_current_context(), **kwargs)
